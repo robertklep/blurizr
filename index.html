@@ -160,7 +160,7 @@
                     var dataURI = ctx.canvas.toDataURL('image/png');
                     $('body').css('background-image', 'url(' + dataURI + ')');
                   };
-                  render(100.0);
+                  render( $('#range input').val() );
 
                   // handle range slider
                   $('#range')
