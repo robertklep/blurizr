@@ -1,0 +1,213 @@
+<!doctype html>
+<html>
+  <head>
+    <script src="http://code.jquery.com/jquery-1.9.1.min.js"></script>
+    <script src="js/StackBlur.js"></script>
+    <style>
+      * { box-sizing: border-box }
+
+      html, body {
+        margin                : 0;
+        padding               : 0;
+        width                 : 100%;
+        height                : 100%;
+        background-color      : white;
+        background-size       : 100% 100%;
+        background-attachment : fixed;
+        background-repeat     : no-repeat;
+        position              : relative;
+        font-family           : 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      }
+
+      #droparea {
+        position: absolute;
+        width   : 250px;
+        height  : 100px;
+        left    : 50%;
+        top     : 50%;
+        color   : black;
+        margin  : -50px 0 0 -125px;
+        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.4);
+        box-shadow: 0 0 50px #888;
+        border  : 3px solid black;
+        line-height: 100px;
+        text-align: center;
+      }
+
+      #droparea.hover {
+        color     : #ccc !important;
+        border    : 3px solid #ccc;
+        background: rgba(0, 0, 0, 0.9);
+      }
+
+      #droparea > span  { 
+        font-size     : 120%;
+        pointer-events: none;
+      }
+
+      #droparea       .drag-it-you-slag { display: inline }
+      #droparea       .drop-it-you-slag { display: none }
+      #droparea.hover .drag-it-you-slag { display: none }
+      #droparea.hover .drop-it-you-slag { display: inline }
+
+      #attribution {
+        position  : fixed;
+        opacity   : 0.5;
+        padding   : 0.5em;
+        bottom    : 0;
+        color     : #888;
+        font-size : 80%;
+      }
+
+      a {
+        text-decoration : none;
+        color           : #88f;
+      }
+
+      #droparea a {
+        position    : absolute;
+        top         : 1em;
+        right       : 1em;
+        line-height : 0;
+        color       : #ccc;
+        font-size   : 50%;
+        display     : none;
+      }
+
+      #range {
+        position    : absolute;
+        width       : 100%;
+        bottom      : 0;
+        left        : 0;
+        line-height : 0;
+        color       : black;
+        font-size   : 50%;
+        display     : none;
+      }
+
+      #range input {
+        vertical-align: middle;
+      }
+
+      canvas, img { display : none }
+    </style>
+  </head>
+  <body>
+    <div id="droparea">
+      <a target="_blank" href="#">show css</a>
+      <span class="drag-it-you-slag">drag your image here</span>
+      <span class="drop-it-you-slag">drop your image here</span>
+      <div id="range">
+        less &raquo; <input type="range" min="0" value="100" max="200" step="5"> &laquo; more
+      </div>
+    </div>
+    <div id="attribution">
+      uses StackBlur by <a target="_blank" href="http://www.quasimondo.com/StackBlurForCanvas">Mario Klingemann</a>
+    </div>
+    <canvas id="dst"></canvas>
+    <script>
+      (function() {
+        var $droparea = $('#droparea');
+
+        // set/remove classes on droparea on drag events
+        $droparea
+          .on('dragenter dragleave dragend', function(ev) {
+            var action = ev.type == 'dragenter' ? 'addClass' : 'removeClass';
+            $droparea[action]('hover');
+            return false;
+          })
+          .on('dragover', function(ev) {
+            ev.originalEvent.preventDefault();
+            ev.originalEvent.stopPropagation();
+            return false;
+          })
+          .on('drop', function(ev) {
+            var ev = ev.originalEvent;
+
+            // prevent default action and stop propagation
+            ev.preventDefault();
+            ev.stopPropagation();
+
+            // remove hover state from droparea
+            $droparea.removeClass('hover');
+
+            // process first file
+            var file      = ev.dataTransfer.files.item(0);
+            var reader    = new FileReader();
+
+            // when file has loaded, start our magic
+            reader.onloadend = function(ev) {
+              // create image
+              $(document.getElementById('img') || document.createElement('img'))
+                .attr('src',  ev.target.result)
+                .attr('id',   'img')
+                .on('load', function() {
+                  var img     = this;
+                  // create canvas
+                  var canvas  = document.getElementById('dst');
+                  var ctx     = canvas.getContext('2d');
+
+                  // resize image
+                  var ratio   = this.height / this.width;
+                  var width   = canvas.width  = 300;
+                  var height  = canvas.height = parseInt(width * ratio, 10);
+                  var render  = function(radius) {
+                    ctx.drawImage(img, 0, 0, width, height);
+                    // perform blur
+                    stackBlurCanvasRGB('dst', 0, 0, width, height, radius);
+                    // set background
+                    var dataURI = ctx.canvas.toDataURL('image/png');
+                    $('body').css('background-image', 'url(' + dataURI + ')');
+                  };
+                  render(100.0);
+
+                  // handle range slider
+                  $('#range')
+                    .css('display', 'block')
+                    .find('input')
+                    .on('change', function() {
+                      render( $(this).val() );
+                    });
+
+                  // set link
+                  $('#droparea a')
+                    .off('click')
+                    .on('click', function(ev) {
+                      ev.preventDefault();
+                      var dataURI = $('body').css('background-image');
+                      var w       = window.open();
+                      w.document.write([
+                        '<pre>',
+                        'body {',
+                        '  background           : #fff ' + dataURI + ' no-repeat;',
+                        '  background-attachment: fixed;',
+                        '  background-size      : 100% 100%;',
+                        '}',
+                        '<pre>',
+                      ].join('\n'));
+                      w.document.close();
+                      return false;
+                    })
+                    .css('display'  , 'block');
+                })
+                .appendTo( $('body') ); // image needs to be present in the DOM
+            };
+
+            // read file
+            reader.readAsDataURL(file);
+
+            // done
+            return false;
+          });
+        
+        // prevent default drop action on body
+        $('body').on('drop', function(ev) {
+          ev.originalEvent.preventDefault();
+          ev.originalEvent.stopPropagation();
+          return false;
+        });
+      })();
+    </script>
+  </body>
+</html>
